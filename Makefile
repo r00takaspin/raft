@@ -2,6 +2,7 @@ all: clean grpc build
 
 clean:
 	rm -rf grpc_api
+	rm -rf raft
 
 build:
 	go build
