@@ -13,7 +13,9 @@ RUN chmod +x /usr/bin/dep
 
 RUN dep ensure --vendor-only
 
-RUN make && make run
+RUN make
 
 EXPOSE 24816
+
+ENTRYPOINT ["./raft"]
 
