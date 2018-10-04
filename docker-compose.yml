@@ -1,0 +1,11 @@
+version: '3'
+services:
+  node1:
+    build: .
+    command: -p 10001 -nodes=node2:10002,node3:10003
+  node2:
+    build: .
+    command: -p 10002 -nodes=node1:10001,node3:10003
+  node3:
+    build: .
+    command: -p 10003 -nodes=node1:10001,node2:10002
