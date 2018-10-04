@@ -15,7 +15,5 @@ RUN dep ensure --vendor-only
 
 RUN make
 
-EXPOSE 24816
-
 ENTRYPOINT ["./raft"]
 

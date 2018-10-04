@@ -2,19 +2,18 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"github.com/r00takaspin/raft/grpc_api/raft"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"log"
 	"net"
 	"os"
+	"strings"
 )
 
 type server struct{}
-
-const (
-	port = ":24816"
-)
 
 type Status byte
 
@@ -28,6 +27,7 @@ var Value int32
 var Nodes []string
 var NodeStatus Status
 var Hostname string
+var Timeount int8
 
 func (s *server) SetValue(ctx context.Context, r *pb.SetValueRequest) (*pb.SetValueResponse, error) {
 	log.Printf("Changing value from %v to %v", Value, r.Value)
@@ -41,17 +41,27 @@ func (s *server) Init(ctx context.Context, r *pb.InitRequest) (*pb.InitResponse,
 }
 
 func main() {
+	port := flag.Int("p", 24816, "-p=10001")
+	nodeList := flag.String("nodes", "", "-nodes=node2:10002,node2:10003")
+
+	Nodes = strings.Split(*nodeList, ",")
+
+	flag.Parse()
+
 	Hostname, _ = os.Hostname()
 
-	ctx := context.Background()
-	initState(ctx)
+	address := fmt.Sprintf("%v:%v", Hostname, *port)
 
-	lis, err := net.Listen("tcp", port)
+	initState()
+
+	log.Printf("%v started as Follower", address)
+
+	lis, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatal("failed to listen: %v", port)
 	}
 
-	log.Printf("Listening grpc requests on port %v", port)
+	log.Printf("Listening grpc requests on port %v", *port)
 	s := grpc.NewServer()
 	// Register reflection service on gRPC server.
 	pb.RegisterRaftServiceServer(s, &server{})
@@ -62,8 +72,6 @@ func main() {
 	}
 }
 
-func initState(ctx context.Context) {
-	log.Printf("%v started as Follower", Hostname)
-
+func initState() {
 	NodeStatus = FOLLOWER
 }
