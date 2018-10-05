@@ -1,17 +1,27 @@
 version: '3'
 services:
   node1:
+    expose:
+      - "10001"
     image: node
     command: -p 10001 -nodes=node2:10002,node3:10003,node4:10004,node5:10005
   node2:
+    expose:
+      - "10002"
     image: node
     command: -p 10002 -nodes=node1:10001,node3:10003,node4:10004,node5:10005
   node3:
+    expose:
+      - "10003"
     image: node
     command: -p 10003 -nodes=node1:10001,node2:10002,node4:10004,node5:10005
   node4:
+    expose:
+      - "10004"
     image: node
     command: -p 10004 -nodes=node1:10001,node2:10002,node3:10003,node5:10005
   node5:
+    expose:
+      - "10005"
     image: node
     command: -p 10005 -nodes=node1:10001,node2:10002,node3:10003,node4:10004

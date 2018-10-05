@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/r00takaspin/raft/grpc_api/raft"
+	"github.com/r00takaspin/raft/lib"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"log"
@@ -12,7 +13,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -58,10 +58,42 @@ func (h *Host) toString() string {
 
 var host Host
 
+// LogEntities
+var LogNumber int32 = 0
+
+type LogEntity struct {
+	Id    int32
+	Value int32
+}
+
+type LogEntities []LogEntity
+
+func (logs *LogEntities) addLog(id int32, value int32) {
+	*logs = append(*logs, LogEntity{Id: id, Value: value})
+}
+
+//Logs
+var Logs LogEntities
+
+//Node list for RPC calls
+var Nodes []pb.RaftServiceClient
+
 // gRPC
 func (s *server) SetValue(ctx context.Context, r *pb.SetValueRequest) (*pb.StatusResponse, error) {
-	log.Printf("Changing value from %v to %v", Value, r.Value)
-	Value = r.Value
+	if NodeStatus == LEADER {
+		log.Printf("LEADER(%v) value from to %v", host.toString(), r.Value)
+
+		LogNumber := LogNumber + 1
+		Logs.addLog(LogNumber, r.Value)
+
+		for i := 0; i < len(Nodes); i++ {
+			Nodes[i].SetValue(ctx, &pb.SetValueRequest{LogId: int32(LogNumber), Value: r.Value})
+		}
+	} else {
+		log.Printf("FOLLOVER(%v) changing value from to %v", Value, r.Value)
+
+		Logs.addLog(r.LogId, r.Value)
+	}
 	return &pb.StatusResponse{Message: true}, nil
 }
 
@@ -188,7 +220,7 @@ func main() {
 	Port := flag.Int("p", 24816, "-p=10001")
 	nodeArg := flag.String("nodes", "", "-nodes=node2:10002,node2:10003")
 	flag.Parse()
-	nodeAddresses := strings.Split(*nodeArg, ",")
+	nodeAddresses := raft.ParseNodes(*nodeArg)
 
 	host = Host{Hostname: Hostname, Port: *Port}
 
@@ -208,6 +240,7 @@ func main() {
 	ctx := context.Background()
 
 	nodes := connectToNodes(nodeAddresses)
+	Nodes = nodes
 
 	timeout := rand.Intn(MAX_HEARTBEAT-MIN_HEARTBEAT) + MIN_HEARTBEAT
 	go heartbeat(ctx, timeout, nodes)
