@@ -3,8 +3,10 @@ syntax = "proto3";
 package pb;
 
 service RaftService {
-  rpc SetValue (SetValueRequest) returns(SetValueResponse) {}
-  rpc Init (InitRequest) returns(InitResponse) {}
+  rpc SetValue (SetValueRequest) returns(StatusResponse) {}
+  rpc Heartbeat(EmptyRequest) returns(StatusResponse) {}
+  rpc RequestVote(EmptyRequest) returns(StatusResponse) {}
+  rpc IsLeader(EmptyRequest) returns(StatusResponse) {}
 }
 
 message SetValueRequest {
@@ -12,18 +14,11 @@ message SetValueRequest {
 }
 
 message SetValueResponse {
-  ResponseStatus message = 2;
+  StatusResponse message = 2;
 }
 
-message InitRequest {
-  repeated string nodes = 3;
+message StatusResponse {
+  bool message = 4;
 }
 
-message InitResponse {
-  ResponseStatus message = 4;
-}
-
-enum ResponseStatus {
-  OK = 0;
-  FAIL = 1;
-}
+message EmptyRequest {}

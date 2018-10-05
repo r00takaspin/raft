@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 )
 
 type server struct{}
@@ -19,53 +20,197 @@ type server struct{}
 type Status byte
 
 const (
+	MIN_HEARTBEAT = 150
+	MAX_HEARTBEAT = 300
+)
+
+const (
 	FOLLOWER Status = iota
 	CANDIDATE
 	LEADER
 )
 
-var Value int32
-var Nodes []string
-var NodeStatus Status
+// Hostname and port of server
 var Hostname string
-var Timeount int8
+var Port string
 
-func (s *server) SetValue(ctx context.Context, r *pb.SetValueRequest) (*pb.SetValueResponse, error) {
-	log.Printf("Changing value from %v to %v", Value, r.Value)
-	Value = r.Value
-	return &pb.SetValueResponse{Message: pb.ResponseStatus_OK}, nil
+// Current value
+var Value int32
+
+// Address of leader node
+var Leader pb.RaftServiceClient = nil
+
+// Number of node votes
+var Term = 0
+
+//Current status of node
+var NodeStatus Status
+
+type Host struct {
+	Hostname string
+	Port     int
 }
 
-func (s *server) Init(ctx context.Context, r *pb.InitRequest) (*pb.InitResponse, error) {
-	log.Printf("Init: %v", r.Nodes)
-	return &pb.InitResponse{Message: pb.ResponseStatus_OK}, nil
+func (h *Host) toString() string {
+	return fmt.Sprintf("%v:%v", h.Hostname, h.Port)
+}
+
+var host Host
+
+// gRPC
+func (s *server) SetValue(ctx context.Context, r *pb.SetValueRequest) (*pb.StatusResponse, error) {
+	log.Printf("Changing value from %v to %v", Value, r.Value)
+	Value = r.Value
+	return &pb.StatusResponse{Message: true}, nil
+}
+
+func (s *server) Heartbeat(ctx context.Context, r *pb.EmptyRequest) (*pb.StatusResponse, error) {
+	log.Printf("%v: Heartbeat", host.toString())
+	return &pb.StatusResponse{Message: true}, nil
+}
+
+func (s *server) RequestVote(ctx context.Context, r *pb.EmptyRequest) (*pb.StatusResponse, error) {
+	log.Printf("%v: RequestVote", host.toString())
+	return &pb.StatusResponse{Message: true}, nil
+}
+
+func (s *server) IsLeader(ctx context.Context, r *pb.EmptyRequest) (*pb.StatusResponse, error) {
+	log.Printf("%v: IsLeader: %v", host.toString(), NodeStatus == LEADER)
+
+	if NodeStatus == LEADER {
+		return &pb.StatusResponse{Message: true}, nil
+	} else {
+		return &pb.StatusResponse{Message: false}, nil
+	}
+}
+
+func heartbeat(ctx context.Context, timeout int, nodes []pb.RaftServiceClient) {
+	sleep(timeout)
+
+	log.Printf("Heartbeat from %v", host.toString())
+
+	if Leader == nil {
+		result := findLeader(ctx, nodes)
+		if result == nil && NodeStatus != LEADER {
+			makeElection(ctx, nodes)
+		}
+	} else {
+		r, err := Leader.IsLeader(ctx, &pb.EmptyRequest{})
+		if r.Message == false || err != nil {
+			Leader = nil
+			makeElection(ctx, nodes)
+		}
+	}
+	heartbeat(ctx, timeout, nodes)
+}
+
+func findLeader(ctx context.Context, nodes []pb.RaftServiceClient) pb.RaftServiceClient {
+	if NodeStatus == LEADER {
+		return nil
+	}
+
+	log.Printf("%v: finding leader", host.toString())
+
+	for i := 0; i < len(nodes); i++ {
+		currentNode := nodes[i]
+
+		r, err := currentNode.IsLeader(ctx, &pb.EmptyRequest{})
+		if err != nil {
+			log.Printf("%v: IsLeader error: %v", host.toString(), err)
+			continue
+		}
+
+		if r.Message == true {
+			return currentNode
+		}
+	}
+	return nil
+}
+
+func sleep(timeout int) {
+	timeToSleep := time.Duration(timeout) * time.Millisecond
+	time.Sleep(timeToSleep)
+}
+
+func makeElection(ctx context.Context, nodes []pb.RaftServiceClient) {
+	NodeStatus = CANDIDATE
+
+	log.Printf("%v becomes candidate", host.toString())
+
+	Term = 1
+
+	for i := 0; i < len(nodes); i++ {
+		if NodeStatus == LEADER {
+			return
+		}
+
+		consensus := len(nodes)
+
+		if Term > int(len(nodes)/2) {
+			log.Printf("%v becomes Leader with %v votes of %v needed", host.toString(), Term, consensus)
+
+			NodeStatus = LEADER
+			Term = 0
+			return
+		}
+
+		if requestVote(ctx, nodes[i]) == true {
+			Term += 1
+		}
+	}
+}
+
+func requestVote(ctx context.Context, currentNode pb.RaftServiceClient) bool {
+	r, error := currentNode.RequestVote(ctx, &pb.EmptyRequest{})
+	if error != nil {
+		log.Printf("%v: RequestVote error: %v", host.toString(), error)
+		return false
+	}
+
+	if r.Message == true {
+		log.Printf("%v got vote from %v", host.toString(), currentNode)
+		return true
+	}
+
+	return false
+}
+
+func init() {
+	NodeStatus = FOLLOWER
+	Hostname, _ = os.Hostname()
 }
 
 func main() {
-	port := flag.Int("p", 24816, "-p=10001")
-	nodeList := flag.String("nodes", "", "-nodes=node2:10002,node2:10003")
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	Nodes = strings.Split(*nodeList, ",")
-
+	rand.Seed(time.Now().UTC().UnixNano())
+	Port := flag.Int("p", 24816, "-p=10001")
+	nodeArg := flag.String("nodes", "", "-nodes=node2:10002,node2:10003")
 	flag.Parse()
+	nodeAddresses := strings.Split(*nodeArg, ",")
 
-	Hostname, _ = os.Hostname()
+	host = Host{Hostname: Hostname, Port: *Port}
 
-	address := fmt.Sprintf("%v:%v", Hostname, *port)
+	address := fmt.Sprintf("%v:%v", Hostname, *Port)
 
-	Timeount := rand.
-		initState()
-
-	log.Printf("%v started as Follower", address)
+	log.Printf("%v started as Follower", host.toString())
 
 	lis, err := net.Listen("tcp", address)
 	if err != nil {
-		log.Fatal("failed to listen: %v", port)
+		log.Fatal("failed to listen: %v", Port)
 	}
 
-	log.Printf("Listening grpc requests on port %v", *port)
+	log.Printf("Listening grpc requests on Port %v", *Port)
 	s := grpc.NewServer()
 	// Register reflection service on gRPC server.
+
+	ctx := context.Background()
+
+	nodes := connectToNodes(nodeAddresses)
+
+	timeout := rand.Intn(MAX_HEARTBEAT-MIN_HEARTBEAT) + MIN_HEARTBEAT
+	go heartbeat(ctx, timeout, nodes)
+
 	pb.RegisterRaftServiceServer(s, &server{})
 
 	reflection.Register(s)
@@ -74,6 +219,24 @@ func main() {
 	}
 }
 
-func initState() {
-	NodeStatus = FOLLOWER
+func connectToNodes(nodes []string) []pb.RaftServiceClient {
+	var result []pb.RaftServiceClient
+
+	for i := 0; i < len(nodes); i++ {
+		currentNode := nodes[i]
+
+		Term = Term + 1
+
+		conn, err := grpc.Dial(currentNode, grpc.WithInsecure())
+		if err != nil {
+			log.Fatalf("did not connect: %v", err)
+		}
+
+		c := pb.NewRaftServiceClient(conn)
+
+		result = append(result, c)
+	}
+	log.Printf("connected to %v nodes from %v", len(result), host.toString())
+
+	return result
 }
