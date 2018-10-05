@@ -1,11 +1,17 @@
 version: '3'
 services:
   node1:
-    build: .
-    command: -p 10001 -nodes=node2:10002,node3:10003
+    image: node
+    command: -p 10001 -nodes=node2:10002,node3:10003,node4:10004,node5:10005
   node2:
-    build: .
-    command: -p 10002 -nodes=node1:10001,node3:10003
+    image: node
+    command: -p 10002 -nodes=node1:10001,node3:10003,node4:10004,node5:10005
   node3:
-    build: .
-    command: -p 10003 -nodes=node1:10001,node2:10002
+    image: node
+    command: -p 10003 -nodes=node1:10001,node2:10002,node4:10004,node5:10005
+  node4:
+    image: node
+    command: -p 10004 -nodes=node1:10001,node2:10002,node3:10003,node5:10005
+  node5:
+    image: node
+    command: -p 10005 -nodes=node1:10001,node2:10002,node3:10003,node4:10004

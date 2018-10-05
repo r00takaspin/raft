@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	"log"
+	"math"
 	"math/rand"
 	"net"
 	"os"
@@ -65,17 +66,17 @@ func (s *server) SetValue(ctx context.Context, r *pb.SetValueRequest) (*pb.Statu
 }
 
 func (s *server) Heartbeat(ctx context.Context, r *pb.EmptyRequest) (*pb.StatusResponse, error) {
-	log.Printf("%v: Heartbeat", host.toString())
+	//log.Printf("%v: Heartbeat", host.toString())
 	return &pb.StatusResponse{Message: true}, nil
 }
 
 func (s *server) RequestVote(ctx context.Context, r *pb.EmptyRequest) (*pb.StatusResponse, error) {
-	log.Printf("%v: RequestVote", host.toString())
+	//log.Printf("%v: RequestVote", host.toString())
 	return &pb.StatusResponse{Message: true}, nil
 }
 
 func (s *server) IsLeader(ctx context.Context, r *pb.EmptyRequest) (*pb.StatusResponse, error) {
-	log.Printf("%v: IsLeader: %v", host.toString(), NodeStatus == LEADER)
+	//log.Printf("%v: IsLeader: %v", host.toString(), NodeStatus == LEADER)
 
 	if NodeStatus == LEADER {
 		return &pb.StatusResponse{Message: true}, nil
@@ -87,7 +88,7 @@ func (s *server) IsLeader(ctx context.Context, r *pb.EmptyRequest) (*pb.StatusRe
 func heartbeat(ctx context.Context, timeout int, nodes []pb.RaftServiceClient) {
 	sleep(timeout)
 
-	log.Printf("Heartbeat from %v", host.toString())
+	//log.Printf("Heartbeat from %v", host.toString())
 
 	if Leader == nil {
 		result := findLeader(ctx, nodes)
@@ -109,7 +110,7 @@ func findLeader(ctx context.Context, nodes []pb.RaftServiceClient) pb.RaftServic
 		return nil
 	}
 
-	log.Printf("%v: finding leader", host.toString())
+	//log.Printf("%v: finding leader", host.toString())
 
 	for i := 0; i < len(nodes); i++ {
 		currentNode := nodes[i]
@@ -144,9 +145,9 @@ func makeElection(ctx context.Context, nodes []pb.RaftServiceClient) {
 			return
 		}
 
-		consensus := len(nodes)
+		consensus := int(math.Floor(float64(len(nodes)/2))) + 1
 
-		if Term > int(len(nodes)/2) {
+		if Term >= consensus {
 			log.Printf("%v becomes Leader with %v votes of %v needed", host.toString(), Term, consensus)
 
 			NodeStatus = LEADER
