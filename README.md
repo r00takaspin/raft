@@ -1,15 +1,10 @@
 # [Имплементация алогоритма консенсуса RAFT](https://raft.github.io)
 
-Сборка:
+На данный момент реализован механизм избрания лидера
 
-    $ docker build . -t raft
-    
 Запуск:
     
-    $ docker run -p 24816:24816 raft
+    $ ./run.sh
     
-Тестовый запрос:
-    
-    $ grpc_cli call 127.0.0.1:24816 SetValue "value: 1" --protofiles proto/raft-grpc.proto
     
  
